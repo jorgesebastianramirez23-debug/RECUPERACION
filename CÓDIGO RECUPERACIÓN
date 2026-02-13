@@ -1,0 +1,60 @@
+## CODIGO
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <math.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_ADDR 0x3C
+#define THERMISTOR A1
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+// Termistor 10K
+const float BETA = 3435.0;
+const float R0 = 10000.0;
+const float SERIES_RESISTOR = 10000.0;
+
+void setup() {
+
+  display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
+  display.clearDisplay();
+  display.display();
+}
+
+void loop() {
+
+  int adc = analogRead(THERMISTOR);
+
+  // Evita división por cero
+  if (adc == 0) adc = 1;
+
+  float resistencia = SERIES_RESISTOR / (1023.0 / adc - 1.0);
+
+  float steinhart;
+  steinhart = resistencia / R0;
+  steinhart = log(steinhart);
+  steinhart /= BETA;
+  steinhart += 1.0 / (25.0 + 273.15);
+  steinhart = 1.0 / steinhart;
+  steinhart -= 273.15;
+
+  float temperaturaC = steinhart;
+
+  display.clearDisplay();
+
+  display.setTextSize(2);
+  display.setCursor(10, 10);
+  display.print("TEMP:");
+
+  display.setTextSize(3);
+  display.setCursor(10, 35);
+  display.print(temperaturaC, 1);
+  display.print(" C");
+
+  display.display();
+
+  delay(500);
+}
+
