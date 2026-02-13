@@ -1,4 +1,3 @@
-## CODIGO
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -6,55 +5,88 @@
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_ADDR 0x3C
-#define THERMISTOR A1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-Adafruit_SSD1306 display(128, 64, &Wire, -1);
+// Pines
+#define TERMISTOR A0
+#define SENSOR_AGUA A1
 
-// Termistor 10K
-const float BETA = 3435.0;
-const float R0 = 10000.0;
-const float SERIES_RESISTOR = 10000.0;
+// Parámetros termistor NTC 10K
+#define R_SERIE 10000.0   // resistencia fija del divisor de voltaje en ohms
+#define BETA 3950.0       // valor típico del termistor
+#define T0 298.15         // 25°C en Kelvin
+#define R0 10000.0        // resistencia a 25°C
+
+// Calibración nivel de agua
+#define AGUA_MIN 200
+#define AGUA_MAX 800
 
 void setup() {
-
-  display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
+  Serial.begin(9600);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
   display.display();
+}
+
+float leerTemperatura() {
+  int adc = analogRead(TERMISTOR);
+
+  // Evitar división por cero
+  if(adc <= 0) adc = 1;
+  if(adc >= 1023) adc = 1022;
+
+  // Calcular resistencia del termistor
+  float Vout = adc * (5.0 / 1023.0);       // voltaje leído
+  float R_therm = R_SERIE * (5.0 / Vout - 1.0); // resistencia del NTC
+
+  // Fórmula Beta para temperatura en Kelvin
+  float tempK = 1.0 / ( (1.0/T0) + (1.0/BETA) * log(R_therm / R0) );
+  float tempC = tempK - 273.15;
+
+  return tempC;
+}
+
+int leerAgua() {
+  int valor = analogRead(SENSOR_AGUA);
+  valor = constrain(valor, AGUA_MIN, AGUA_MAX);
+  int porcentaje = map(valor, AGUA_MIN, AGUA_MAX, 0, 100);
+  porcentaje = constrain(porcentaje, 0, 100);
+  return porcentaje;
 }
 
 void loop() {
+  float temperaturaC = leerTemperatura();
+  int nivelAgua = leerAgua();
 
-  int adc = analogRead(THERMISTOR);
+  // Depuración serie
+  Serial.print("Temp C: "); Serial.print(temperaturaC); 
+  Serial.print(" | Agua %: "); Serial.println(nivelAgua);
 
-  // Evita división por cero
-  if (adc == 0) adc = 1;
-
-  float resistencia = SERIES_RESISTOR / (1023.0 / adc - 1.0);
-
-  float steinhart;
-  steinhart = resistencia / R0;
-  steinhart = log(steinhart);
-  steinhart /= BETA;
-  steinhart += 1.0 / (25.0 + 273.15);
-  steinhart = 1.0 / steinhart;
-  steinhart -= 273.15;
-
-  float temperaturaC = steinhart;
-
+  // Limpiar pantalla
   display.clearDisplay();
 
+  // ===== Temperatura =====
   display.setTextSize(2);
-  display.setCursor(10, 10);
-  display.print("TEMP:");
-
-  display.setTextSize(3);
-  display.setCursor(10, 35);
+  display.setTextColor(WHITE);
+  display.setCursor(20, 0);
   display.print(temperaturaC, 1);
   display.print(" C");
 
-  display.display();
+  // ===== Barra nivel de agua =====
+  int barraX = 14;
+  int barraY = 40;
+  int barraAncho = 100;
+  int barraAlto = 15;
 
+  display.drawRect(barraX, barraY, barraAncho, barraAlto, WHITE);
+  int anchoRelleno = map(nivelAgua, 0, 100, 0, barraAncho - 2);
+  display.fillRect(barraX + 1, barraY + 1, anchoRelleno, barraAlto - 2, WHITE);
+
+  // Etiqueta
+  display.setTextSize(1);
+  display.setCursor(barraX, barraY - 10);
+  display.print("Nivel Agua");
+
+  display.display();
   delay(500);
 }
-
